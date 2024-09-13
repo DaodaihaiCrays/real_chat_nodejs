@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Messenger-like Chat App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        #loginDiv, #friendsDiv, #chatDiv {
+            margin: 20px;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        #friendsList {
+            list-style-type: none;
+            padding: 0;
+        }
+        #friendsList li {
+            cursor: pointer;
+            padding: 10px;
+            background-color: #f0f0f0;
+            margin-bottom: 5px;
+        }
+        #friendsList li:hover {
+            background-color: #ccc;
+        }
+        #messages {
+            list-style-type: none;
+            padding: 0;
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            margin-bottom: 20px;
+        }
+        #messages li {
+            padding: 10px;
+            margin-bottom: 5px;
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Messenger-like Chat App</h1>
+
+    <div id="loginDiv">
+        <h2>Đăng nhập</h2>
+        <form id="loginForm">
+            <input id="usernameInput" placeholder="Tên đăng nhập" required />
+            <input id="passwordInput" type="password" placeholder="Mật khẩu" required />
+            <button type="submit">Đăng nhập</button>
+        </form>
+        <p id="loginError" style="color: red;"></p>
+    </div>
+
+    <div id="friendsDiv" style="display: none;">
+        <h2>Chọn người để chat</h2>
+        <ul id="friendsList"></ul>
+    </div>
+
+    <div id="chatDiv" style="display: none;">
+        <h2>Chat với <span id="chatWith"></span></h2>
+        <ul id="messages"></ul>
+        <form id="messageForm">
+            <input id="messageInput" autocomplete="off" placeholder="Nhập tin nhắn..." />
+            <button type="submit">Gửi</button>
+        </form>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let userId = null;
+        let currentConversationId = null;
+        let currentFriend = null;
+
+        const loginForm = document.getElementById('loginForm');
+        const usernameInput = document.getElementById('usernameInput');
+        const passwordInput = document.getElementById('passwordInput');
+        const loginError = document.getElementById('loginError');
+        const friendsDiv = document.getElementById('friendsDiv');
+        const chatDiv = document.getElementById('chatDiv');
+        const friendsList = document.getElementById('friendsList');
+        const chatWith = document.getElementById('chatWith');
+        const messages = document.getElementById('messages');
+        const messageForm = document.getElementById('messageForm');
+        const messageInput = document.getElementById('messageInput');
+
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const username = usernameInput.value.trim();
+            const password = passwordInput.value.trim();
+
+            fetch('/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.userId) {
+                    userId = data.userId;
+                    loadFriendsList();
+                    loginForm.style.display = 'none';
+                    friendsDiv.style.display = 'block';
+                } else {
+                    loginError.textContent = 'Đăng nhập thất bại';
+                }
+            })
+            .catch(error => {
+                loginError.textContent = 'Lỗi kết nối';
+            });
+        });
+
+        function loadFriendsList() {
+            fetch(`/users?excludeUserId=${userId}`)
+            .then(response => response.json())
+            .then(users => {
+                friendsList.innerHTML = ''; 
+                users.forEach(user => {
+                    const li = document.createElement('li');
+                    li.textContent = user.username;
+                    li.addEventListener('click', () => {
+                        startConversation(user.id, user.username);
+                    });
+                    friendsList.appendChild(li);
+                });
+            })
+            .catch(error => {
+                console.error('Lỗi khi lấy danh sách người dùng:', error);
+            });
+        }
+
+        function startConversation(friendId, friendName) {
+            currentFriend = friendId;
+            chatWith.textContent = friendName;
+            friendsDiv.style.display = 'none';
+            chatDiv.style.display = 'block';
+
+            socket.emit('start conversation', { user1_id: userId, user2_id: friendId });
+
+            socket.on('conversation started', (data) => {
+                currentConversationId = data.conversation_id;
+                socket.emit('join conversation', currentConversationId);
+                loadMessages();
+            });
+        }
+
+        function loadMessages() {
+            messages.innerHTML = ''; 
+        }
+
+        messageForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const message = messageInput.value.trim();
+            if (message && currentConversationId) {
+                socket.emit('chat message', {
+                    conversation_id: currentConversationId,
+                    sender_id: userId,
+                    message: message
+                });
+                messageInput.value = ''; 
+            }
+        });
+
+        socket.on('chat message', (data) => {
+            if (data.conversation_id === currentConversationId) {
+                const item = document.createElement('li');
+                item.textContent = `${data.sender_id === userId ? 'Tôi' : 'Bạn'}: ${data.message}`;
+                messages.appendChild(item);
+            }
+        });
+
+        socket.on('load old messages', (messages) => {
+            messages.forEach((msg) => {
+                const item = document.createElement('li');
+                item.textContent = `${msg.sender_id === userId ? 'Tôi' : 'Bạn'}: ${msg.message}`;
+                document.getElementById('messages').appendChild(item);
+            });
+        });
+    </script>
+</body>
+</html>
