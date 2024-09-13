@@ -122,6 +122,9 @@ io.on('connection', (socket) => {
     });
 
     // Lắng nghe sự kiện "chat message" từ client (khi người dùng gửi tin nhắn)
+    // Mỗi khi server nhận được tin nhắn từ client, nó sẽ phát tin nhắn đó tới tất cả các client trong phòng 
+    // conversation_id, tức là tất cả những người tham gia cuộc trò chuyện 
+    //sẽ nhận được tin nhắn mới ngay lập tức.
     socket.on('chat message', ({ conversation_id, sender_id, message }) => {
         // Lưu tin nhắn mới vào cơ sở dữ liệu với ID của cuộc trò chuyện và ID của người gửi
         db.run(`INSERT INTO messages (conversation_id, sender_id, message) VALUES (?, ?, ?)`, [conversation_id, sender_id, message], (err) => {

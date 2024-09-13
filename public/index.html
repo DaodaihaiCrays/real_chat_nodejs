@@ -165,6 +165,9 @@
             }
         });
 
+        // Phần mã này kiểm tra nếu conversation_id của tin nhắn trùng khớp với cuộc trò chuyện hiện tại 
+        // (currentConversationId), thì tin nhắn mới sẽ được thêm vào danh sách <ul> 
+        // mà không cần tải lại trang. (hiện tn mới ngay lập tức)
         socket.on('chat message', (data) => {
             if (data.conversation_id === currentConversationId) {
                 const item = document.createElement('li');
